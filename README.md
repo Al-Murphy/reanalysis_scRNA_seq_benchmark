@@ -1,2 +1,6 @@
 # reanalysis_scRNA_seq_benchmark
 A reanalysis the results of the paper [A practical solution to pseudoreplication bias in single-cell studies](https://www.nature.com/articles/s41467-021-21038-1)
+
+Recently Zimmerman et al. proposed the use of mixed models over pseudobulk aggregation approaches, reporting improved performance on a novel simulation approach of hierarchical single-cell expression data. However, their reported results could not prove the superiority of mixed models as they only calculate performance based on type 1 error (performance of the models on non-differentially expressed genes). To correctly benchmark the models, a reanalysis using a balanced measure of performance, considering both the type 1 and type 2 errors (both the differentially and non-differentially expressed genes), is necessary.
+
+This analysis was conducted using a modified version of hierarchicell which returns the Matthews correlation coefficient performance metric as well as the type 1 error rates, uses the same simulated data across approaches and has checkpointing capabilities (so runs can continue from where they left off if aborted or crashed) is available at: https://github.com/neurogenomics/hierarchicell.
