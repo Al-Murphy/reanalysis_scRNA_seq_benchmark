@@ -1,0 +1,202 @@
+---
+title: "Benchmarking approaches for the analysis of single-cell expression data"
+author: "Alan Murphy"
+date: "Most recent update:<br> `r Sys.Date()`"
+output: 
+  rmarkdown::html_document: 
+    theme: spacelab
+    highlight: zenburn 
+    code_folding: show 
+    toc: true 
+    toc_float: true
+    smooth_scroll: true
+    number_sections: false 
+    self_contained: true 
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=T, message=F}
+#root.dir <- here::here()
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  #root.dir = root.dir
+  fig.height = 6,
+  fig.width = 7.00787 #178mm
+)  
+knitr::opts_knit$set(#root.dir = root.dir, 
+                     dpi = 350)  
+
+library(data.table)
+library(cowplot)
+library(wesanderson)
+library(ggplot2)
+library(patchwork)
+```
+
+## Background
+
+Recently, [Zimmerman et al.](https://www.nature.com/articles/s41467-021-21038-1) 
+proposed the use of mixed models over pseudobulk aggregation approaches, 
+reporting improved performance on a novel simulation approach of hierarchical 
+single-cell expression data. However, their reported results could not prove the
+superiority of mixed models as they only calculate performance based on type 1 
+error (performance of the models on non-differentially expressed genes). To 
+correctly benchmark the models, a reanalysis using a balanced measure of 
+performance, considering both the type 1 and type 2 errors (both the 
+differentially and non-differentially expressed genes), is necessary.
+
+This benchmark was conducted using the R/benchmark_script.R in this repository 
+and an edited version of hierarchicell which returns the Matthews correlation 
+coefficient performance metric as well as the type 1 error rates, uses the same 
+simulated data across approaches and has checkpointing capabilities (so runs can
+continue from where they left off if aborted or crashed), available at: 
+https://github.com/neurogenomics/hierarchicell. 
+
+We tested the models using the Matthews Correlation Coefficient (MCC). MCC is a 
+well-known and frequently adopted metric in the machine learning field which 
+offers a more [informative and reliable score on binary classification problems](https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-019-6413-7).
+MCC produces scores in [-1,1] and will only assign a high score if a model 
+performs well on both non-differentially and differentially expressed genes. 
+Moreover, MCC scores are proportional to both the size of the differentially and
+non-differentially expressed genes, so it is robust to imbalanced datasets.
+
+The benchmark was conducted based on the average MCC from 20,000 iterations; 
+50 runs for each of the 5 to 40 individuals and 50 to 500 cells at a p-value 
+cut-off of 0.05 on 10,000 genes (5,000 differentially expressed genes at varying
+fold changes and 5,000 non-differentially expressed genes).
+
+## Results of benchmark analysis
+
+We can visualise the results from the analysis, first load the data which is 
+stored in this repo:
+
+```{r}
+res <- data.table::fread("./results/method_performances.csv")
+print(head(res))
+```
+
+Now let's plot the results. We will split this plot to also show just the top 
+four performing results (left) so the differences between these are clearer:
+
+```{r}
+#get colour palette set up - choose distinctive colours
+#with similar tones for similar methods
+q10 <- c(
+  #orange - GEE
+  "orange2",
+  #yellow - modified t
+  "yellow2",
+  #purple - PB
+  "plum2",
+  "purple3",
+  #gold - Tobit
+  "goldenrod4",
+  #green - GLMs
+  "seagreen1",
+  "green4",
+  #blue - MAST
+  "dodgerblue4",
+  "cadetblue4",
+  "cadetblue2"
+)
+
+all_n_ind <- c(5,10,20,30,40)
+all_n_cells <- c(50,100,250,500)
+tmp <- expand.grid(all_n_ind, all_n_cells)
+tmp <- tmp[order(tmp$Var1),]
+#create plotting column n_ind,n_cells - make factor so order maintained
+res[,n_ind_n_cells:=factor(paste0(n_ind,"-\n",n_cells),
+                            levels=apply(tmp, 1, paste, collapse="-\n"))]
+#add descriptive method name
+res[,method_des:=fcase(
+      method == "MAST", "Two-part hurdle: Default",
+      method == "MAST_Combat", "Two-part hurdle: Corrected",
+      method == "MAST_RE","Two-part hurdle RE",
+      method == "Monocle","Tobit",
+      method == "ROTS","Modified t",
+      method == "GLMM_tweedie","Tweedie: GLMM",
+      method == "GLM_tweedie","Tweedie: GLM",
+      method == "Pseudobulk_mean","Pseudobulk: Mean",
+      method == "Pseudobulk_sum","Pseudobulk: Sum",
+      method == "GEE1","GEE1"
+  )]
+
+mcc_res <- res[,mean(MCC),
+               c("n_ind_n_cells","n_ind","n_cells","method_des")]
+setorder(mcc_res,method_des)
+
+#plot all res
+plt_mcc1 <-
+    ggplot(mcc_res)+
+    geom_line(aes(x=n_ind_n_cells,y=V1,colour=method_des,group=method_des))+
+    geom_vline(xintercept=4.5,color="grey",linetype = 3)+
+    geom_vline(xintercept=8.5,color="grey",linetype = 3)+
+    geom_vline(xintercept=12.5,color="grey",linetype = 3)+
+    geom_vline(xintercept=16.5,color="grey",linetype = 3)+
+    theme_cowplot()+
+    scale_colour_manual(values=q10)+
+    labs(colour='Method',y="Matthews Correlation Coefficient (MCC)",
+         x="Number of Individuals - Number of cells")+
+  theme(axis.text.x = element_text(size=6),
+        axis.text.y = element_text(size=6),
+        axis.title.x = element_text(size=9),
+        axis.title.y = element_text(size=9),
+        legend.text = element_text(size=9),
+        legend.title = element_blank())
+#plot top 4
+plt_mcc2 <-
+  ggplot(mcc_res[method_des %in% c("Pseudobulk: Mean","Pseudobulk: Sum",
+                                    "GEE1","Tweedie: GLMM"),])+
+  geom_line(aes(x=n_ind_n_cells,y=V1,colour=method_des,group=method_des),
+            show.legend = FALSE)+
+  geom_vline(xintercept=4.5,color="grey",linetype = 3)+
+  geom_vline(xintercept=8.5,color="grey",linetype = 3)+
+  geom_vline(xintercept=12.5,color="grey",linetype = 3)+
+  geom_vline(xintercept=16.5,color="grey",linetype = 3)+
+  theme_cowplot()+
+  labs(colour='Method',y="Matthews Correlation Coefficient (MCC)",
+       x="Number of Individuals - Number of cells")+
+  theme(axis.text.x = element_text(size=6),
+        axis.text.y = element_text(size=6),
+        axis.title.x = element_text(size=9),
+        axis.title.y = element_blank(),
+        legend.text = element_text(size=9),
+        legend.title = element_blank())+
+  #get matching colours for DEG approaches from full graph
+  scale_colour_manual(values=q10[c(1,3,4,7)])
+
+plt_mcc1 + plt_mcc2 + 
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+```
+
+
+So it is clear that our results demonstrate that pseudobulk approaches are far 
+from being "too conservative" and are, in fact, the best performing models 
+based on this simulated dataset for the analysis of single-cell expression data.
+
+## Future work
+
+Pseudobulk approaches were also found to be the top performing approaches in a 
+recent review by [Squair et al.](https://www.nature.com/articles/s41467-021-25960-2).
+Notably, the pseudobulk method used here; DESeq25, performed worse than other 
+pseudobulk models in Squair et al.,’s analysis and so their adoption may further
+increase the performance of pseudobulk approaches on our dataset. Conversely, 
+Squair et al., did not consider all models included in our analysis or the 
+different forms of pseudobulk aggregation. Therefore, our results on sum and 
+mean pseudobulk extend their findings and indicate that mean aggregation may be 
+the best performing. 
+However, you should be cognizant of the number of cells simulated by 
+hierachicell, which are x10 to x100 times lower than that expected in the 
+latest single-cell expression datasets hence, the results reported here may vary
+on larger datasets. We speculate that the methods that noted increased 
+performance as the number of cells increased (Pseudobulk: Mean and 
+Pseudobulk: Sum, GEE1 and Tweedie: GLMM) would see this trend continue but this 
+should be tested. Moreover, the use of simulated datasets in our analysis may 
+not accurately reflect the differences between individuals that are present in 
+biological datasets. Thus, despite both our results and those reported by 
+Squair et al., there is still room for further analysis, benchmarking more 
+models, including different combinations of pseudobulk aggregation methods and 
+models, on more representative simulated datasets and biological datasets to 
+identify the optimal approach. 
