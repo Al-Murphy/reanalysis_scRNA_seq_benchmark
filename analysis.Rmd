@@ -176,27 +176,106 @@ So it is clear that our results demonstrate that pseudobulk approaches are far
 from being "too conservative" and are, in fact, the best performing models 
 based on this simulated dataset for the analysis of single-cell expression data.
 
+Now let's check on an imbalanced number of cells, plotted with the balanced 
+number of cells for comparison for 20 individuals. This time we will also plot 
+the standard deviation around the mean to show how much the performance varies:
+
+```{r}
+res_imbal <- data.table::fread("./results/method_performances_imbal.csv")
+
+#add descriptive method name
+res_imbal[,method_des:=fcase(
+  method == "MAST", "Two-part hurdle: Default",
+  method == "MAST_Combat", "Two-part hurdle: Corrected",
+  method == "MAST_RE","Two-part hurdle RE",
+  method == "Monocle","Tobit",
+  method == "ROTS","Modified t",
+  method == "GLMM_tweedie","Tweedie: GLMM",
+  method == "GLM_tweedie","Tweedie: GLM",
+  method == "Pseudobulk_mean","Pseudobulk: Mean",
+  method == "Pseudobulk_sum","Pseudobulk: Sum",
+  method == "GEE1","GEE1"
+)]
+
+res_imbal[,n_cells:="imbal"]
+res_imbal[,n_ind_n_cells:=factor(paste0(n_ind,"-\n",n_cells))]
+
+mcc_res_imbal <- res_imbal[,mean(MCC),
+                           c("n_ind_n_cells","n_ind","n_cells","method_des")]
+
+#add in runs for 20 ind not imbal
+mcc_res_imbal <- 
+  rbindlist(list(mcc_res[n_ind==20,],mcc_res_imbal))
+
+#plot with error bands
+#get sd
+sd_imbal <- 
+  res_imbal[,sd(MCC),
+          c("n_ind_n_cells","n_ind","n_cells","method_des")]
+sd_bal <-
+  res[,sd(MCC),
+      c("n_ind_n_cells","n_ind","n_cells","method_des")]
+
+sd_imbal <- rbindlist(list(sd_bal[n_ind==20,],sd_imbal))
+setnames(sd_imbal,"V1","sd")
+
+mcc_res_imbal[sd_imbal,sd:=i.sd, on=c("n_ind_n_cells","method_des")]
+
+ggplot(mcc_res_imbal)+
+  geom_line(aes(x=n_ind_n_cells,y=V1,colour=method_des,group=method_des))+
+  geom_vline(xintercept=4.5,color="grey",linetype = 3)+
+  #error bars with sd
+  geom_errorbar(aes(x=n_ind_n_cells,ymin=V1-sd, ymax=V1+sd,colour=method_des), width=.2,
+                position=position_dodge(0.05))+
+  theme_cowplot()+
+  scale_colour_manual(values=q10)+
+  labs(colour='Method',y="Matthews Correlation Coefficient (MCC)",
+       x="Number of Individuals - Number of cells")+
+  theme(axis.text.x = element_text(size=6),
+        axis.text.y = element_text(size=6),
+        axis.title.x = element_text(size=9),
+        axis.title.y = element_text(size=9),
+        legend.text = element_text(size=9),
+        legend.title = element_blank())
+```
+
+Pseudobulk mean outperformed all other approaches on this analysis. The 
+pseudobulk approach which aggregated by averaging rather than taking the sum 
+appears to be the top performing overall, however, it is worth noting that 
+hierarchicell does not normalise the simulated datasets before passing to the 
+pseudobulk approaches. This is a standard step in such analysis to account for 
+differences in sequencing depth and library sizes. This approach was taken by 
+Zimmerman et al. as their data is simulated one independent gene at a time 
+without considering differences in library size. The effect of this step is more
+apparent on the imbalanced number of cells where pseudobulk sum’s performance 
+degraded dramatically. Pseudobulk mean appears invariant to this missing 
+normalisation step because of averaging’s own normalisation effect. It should be
+noted that this is a flaw in the simulation software strategy and does not show 
+an improved performance of pseudobulk mean over sum.
+
 ## Future work
 
 Pseudobulk approaches were also found to be the top performing approaches in a 
 recent review by [Squair et al.](https://www.nature.com/articles/s41467-021-25960-2).
-Notably, the pseudobulk method used here; DESeq25, performed worse than other 
+Notably, the pseudobulk method used here; DESeq2, performed worse than other 
 pseudobulk models in Squair et al.,’s analysis and so their adoption may further
 increase the performance of pseudobulk approaches on our dataset. Conversely, 
 Squair et al., did not consider all models included in our analysis or the 
 different forms of pseudobulk aggregation. Therefore, our results on sum and 
 mean pseudobulk extend their findings and indicate that mean aggregation may be 
 the best performing. 
-However, you should be cognizant of the number of cells simulated by 
-hierachicell, which are x10 to x100 times lower than that expected in the 
-latest single-cell expression datasets hence, the results reported here may vary
-on larger datasets. We speculate that the methods that noted increased 
-performance as the number of cells increased (Pseudobulk: Mean and 
-Pseudobulk: Sum, GEE1 and Tweedie: GLMM) would see this trend continue but this 
-should be tested. Moreover, the use of simulated datasets in our analysis may 
-not accurately reflect the differences between individuals that are present in 
-biological datasets. Thus, despite both our results and those reported by 
-Squair et al., there is still room for further analysis, benchmarking more 
-models, including different combinations of pseudobulk aggregation methods and 
-models, on more representative simulated datasets and biological datasets to 
-identify the optimal approach. 
+However, you should be cognizant that the lack of a normalisation step based on 
+the flaw in the simulation software strategy likely causes the increased 
+performance of mean over sum aggregation. Further, the use of simulated datasets
+in our analysis may not accurately reflect the differences between individuals 
+that are present in biological datasets. Thus, despite both our results and 
+those reported by Squair et al., there is still room for further analysis, 
+benchmarking more models, including different combinations of pseudobulk 
+aggregation methods and models, on more representative simulated datasets and 
+biological datasets to identify the optimal approach. Specifically, we would 
+expect pseudobulk sum with a normalisation step to outperform pseudobulk mean 
+since it can account for the intra-individual variance which is otherwise lost 
+with pseudobulk mean but this should be tested.
+In conclusion, these results demonstrate that pseudobulk approaches are far from 
+being too conservative and are, in fact, the best performing models based on 
+this simulated dataset for the analysis of single-cell expression data.
