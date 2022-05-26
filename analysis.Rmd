@@ -33,6 +33,7 @@ library(cowplot)
 library(wesanderson)
 library(ggplot2)
 library(patchwork)
+library(pROC)
 ```
 
 ## Background
@@ -252,6 +253,78 @@ degraded dramatically. Pseudobulk mean appears invariant to this missing
 normalisation step because of averaging’s own normalisation effect. It should be
 noted that this is a flaw in the simulation software strategy and does not show 
 an improved performance of pseudobulk mean over sum.
+
+Finally, it may be of interest to consider the performance of the different 
+methods at the same type 1 error rates. We can inspect their sensitivity 
+(1-type 2 error) at different type 1 error with Receiver Operating Curves 
+(ROCs).
+
+```{r}
+#load results
+dat_rocs <- data.table::fread("./results/method_performances_imbal_DEGs.csv")
+#add descriptive method name
+dat_rocs[,method_des:=fcase(
+  method == "MAST", "Two-part hurdle: Default",
+  method == "MAST_Combat", "Two-part hurdle: Corrected",
+  method == "MAST_RE","Two-part hurdle RE",
+  method == "Monocle","Tobit",
+  method == "ROTS","Modified t",
+  method == "GLMM_tweedie","Tweedie: GLMM",
+  method == "GLM_tweedie","Tweedie: GLM",
+  method == "Pseudobulk_mean","Pseudobulk: Mean",
+  method == "Pseudobulk_sum","Pseudobulk: Sum",
+  method == "GEE1","GEE1"
+)]
+setorder(dat_rocs,method_des)
+method_desc <- c("Two-part hurdle: Default","Two-part hurdle RE",
+                 "Two-part hurdle: Corrected","Tweedie: GLM","Tweedie: GLMM",
+                 "GEE1","Pseudobulk: Mean","Pseudobulk: Sum","Tobit",
+                 "Modified t")
+
+#loop through all proportions of DEGs
+prop_DEGs <- c(0.05,0.1,0.2,0.3)
+prop_rocs <- vector(mode="list",length=length(prop_DEGs))
+names(prop_rocs) <- prop_DEGs
+for(prop_i in prop_DEGs){
+  dat_rocs_prop <- dat_rocs[prop_DEGs==prop_i,]
+  #need to create a separate ROC obj per method
+  rocs <- vector(mode="list",length=length(method_desc))
+  names(rocs) <- unique(dat_rocs$method_des)
+  for(method_i in unique(dat_rocs$method_des)){
+    #define object to plot
+    rocs[[method_i]] <- 
+      pROC::roc(dat_rocs_prop[method_des==method_i,]$actual, 
+                dat_rocs_prop[method_des==method_i,]$pred)
+  }
+  #create ROC plot
+  prop_rocs[[as.character(prop_i)]]<-
+    ggroc(rocs,legacy.axes=TRUE)+
+    annotate("text", size=2.8, family="Helvetica",fontface="bold",
+             x = rep(0.9,10), 
+             y=rev(c(0,0.03,0.06,0.09,0.12,0.15,0.18,0.21,0.24,0.27)),
+             label = lapply(rocs,function(x) round(x$auc[1],3)),color=q10)+
+    #geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1), 
+    #              color="darkgrey", linetype="dashed")+
+    #geom_text(lapply(rocs,function(x) x$auc[1]))+
+    theme_cowplot()+
+    scale_colour_manual(values=q10)+
+    labs(colour='Method',y="1 - Type 2 error",
+         x="Type 1 error")+
+    ggtitle(as.character(prop_i))+
+    theme(plot.title = element_text(size = 9, face = NULL),
+          axis.text.x = element_text(size=6),
+          axis.text.y = element_text(size=6),
+          axis.title.x = element_text(size=9),
+          axis.title.y = element_text(size=9),
+          legend.text = element_text(size=9),
+          legend.title = element_blank())
+}
+
+#plot all
+prop_rocs[["0.05"]] + prop_rocs[["0.1"]] + 
+  prop_rocs[["0.2"]]+prop_rocs[["0.3"]] + 
+  plot_layout(guides = "collect",ncol = 4) & theme(legend.position = "bottom")
+```
 
 ## Future work
 

@@ -10,10 +10,8 @@
 #
 # WARNING: This is both extremely memory and time intensive. Each number
 # of cells and number of individuals combination is rerun 50 times giving
-# a total of 20,000 runs. For the mixed model/two-part hurdle models each
-# of these runs can take a very long time and use a lot of memory. For 
-# example, 1 run of GLMM Tweedie with 40 individuals and 500 cells will 
-# take up to 120 gb RAM and will run for over a week
+# a total of 200 runs. For the mixed model/two-part hurdle models each
+# of these runs can take a very long time and use a lot of memory.
 #-------------------------------------
 
 devtools::install_github("neurogenomics/hierarchicell")
