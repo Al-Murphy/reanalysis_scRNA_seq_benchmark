@@ -261,7 +261,8 @@ methods at the same type 1 error rates. We can inspect their sensitivity
 
 ```{r}
 #load results
-dat_rocs <- data.table::fread("./results/method_performances_imbal_DEGs.csv")
+dat_rocs <- 
+  data.table::fread("unzip -p ./results/method_performances_imbal_DEGs.csv.zip")
 #add descriptive method name
 dat_rocs[,method_des:=fcase(
   method == "MAST", "Two-part hurdle: Default",
