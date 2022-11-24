@@ -1,4 +1,6 @@
-# reanalysis_scRNA_seq_benchmark
+# reanalysis_scRNA_seq_benchmark 
+[![DOI](https://zenodo.org/badge/451781506.svg)](https://zenodo.org/badge/latestdoi/451781506)
+
 A reanalysis the results of the paper [A practical solution to pseudoreplication bias in single-cell studies](https://www.nature.com/articles/s41467-021-21038-1)
 
 Recently Zimmerman et al. proposed the use of mixed models over pseudobulk aggregation approaches, reporting improved performance on a novel simulation approach of hierarchical single-cell expression data. However, their reported results could not prove the superiority of mixed models as they are based on separate calculations of type 1 (performance of the models on non-differentially expressed genes) and type 2 error (performance on differentially expressed genes). To correctly benchmark the models, a reanalysis using a balanced measure of performance, considering both the type 1 and type 2 errors (both the differentially and non-differentially expressed genes), is necessary.
